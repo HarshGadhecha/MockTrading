@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.MockTrading"
+      "bundleIdentifier": "com.app.MockTrading"
     },
     "android": {
       "adaptiveIcon": {
