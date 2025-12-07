@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,8 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/src/context';
-import { Loading } from '@/src/components';
-import { searchAssets } from '@/src/services/marketData';
+import { Loading, PriceChange } from '@/src/components';
+import { searchAssets, getCurrentPrices } from '@/src/services/marketData';
 import { SearchResult, Asset } from '@/src/types';
 import { formatCurrency, formatPercentage } from '@/src/utils';
 import { Colors, Typography, Spacing } from '@/src/constants/theme';
@@ -22,6 +22,46 @@ export default function WishlistScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [favouritePrices, setFavouritePrices] = useState<Record<string, { price: number; change: number; changePercent: number }>>({});
+
+  // Load favourite prices on mount and refresh
+  useEffect(() => {
+    loadFavouritePrices();
+
+    // Refresh prices every 10 seconds
+    const interval = setInterval(() => {
+      loadFavouritePrices();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [favourites]);
+
+  const loadFavouritePrices = async () => {
+    if (favourites.length === 0) return;
+
+    const assetIds = favourites.map((fav) => fav.assetId);
+    const response = await getCurrentPrices(assetIds);
+
+    if (response.success && response.data) {
+      // Fetch full asset details to get price changes
+      const pricesWithChanges: Record<string, { price: number; change: number; changePercent: number }> = {};
+
+      for (const fav of favourites) {
+        const price = response.data[fav.assetId];
+        if (price) {
+          // For now, we'll use the price directly
+          // In a real scenario, you'd fetch full details to get change data
+          pricesWithChanges[fav.assetId] = {
+            price,
+            change: 0, // Will be updated with real data from API
+            changePercent: 0,
+          };
+        }
+      }
+
+      setFavouritePrices(pricesWithChanges);
+    }
+  };
 
   const handleSearch = async (query: string) => {
     setSearchQuery(query);
@@ -110,30 +150,51 @@ export default function WishlistScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Favourites</Text>
             {favourites.length > 0 ? (
-              favourites.map((fav) => (
-                <TouchableOpacity
-                  key={fav.id}
-                  style={styles.assetItem}
-                  onPress={() => router.push(`/asset/${fav.assetId}`)}
-                >
-                  <View style={styles.assetInfo}>
-                    <View style={styles.assetHeader}>
-                      <Text style={styles.assetSymbol}>{fav.symbol}</Text>
-                      <View style={styles.categoryBadge}>
-                        <Text style={styles.categoryText}>
-                          {fav.category.replace('_', ' ')}
-                        </Text>
+              favourites.map((fav) => {
+                const priceData = favouritePrices[fav.assetId];
+                return (
+                  <TouchableOpacity
+                    key={fav.id}
+                    style={styles.assetItem}
+                    onPress={() => router.push(`/asset/${fav.assetId}`)}
+                  >
+                    <View style={styles.assetInfo}>
+                      <View style={styles.assetHeader}>
+                        <Text style={styles.assetSymbol}>{fav.symbol}</Text>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryText}>
+                            {fav.category.replace('_', ' ')}
+                          </Text>
+                        </View>
                       </View>
+                      <Text style={styles.assetName}>{fav.name}</Text>
                     </View>
-                    <Text style={styles.assetName}>{fav.name}</Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={Colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              ))
+                    <View style={styles.assetStats}>
+                      {priceData ? (
+                        <>
+                          <Text style={styles.assetPrice}>
+                            {formatCurrency(priceData.price)}
+                          </Text>
+                          {priceData.change !== 0 && (
+                            <PriceChange
+                              value={priceData.change}
+                              percentage={priceData.changePercent}
+                              size="small"
+                              showIcon={false}
+                            />
+                          )}
+                        </>
+                      ) : (
+                        <Ionicons
+                          name="chevron-forward"
+                          size={20}
+                          color={Colors.textSecondary}
+                        />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
             ) : (
               <View style={styles.emptyState}>
                 <Ionicons name="heart-outline" size={64} color={Colors.textLight} />

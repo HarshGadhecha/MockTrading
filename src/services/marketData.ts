@@ -7,19 +7,41 @@ import {
   APIResponse,
 } from '../types';
 
+// Import real API services
+import {
+  searchAssetsPolygon,
+  getAssetDetailsPolygon,
+  getCurrentPricePolygon,
+  getCurrentPricesPolygon,
+  getChartDataPolygon,
+} from './api/polygonApi';
+
+import {
+  searchCryptoCoingecko,
+  getCryptoDetailsCoingecko,
+  getCurrentCryptoPriceCoingecko,
+  getCurrentCryptoPricesCoingecko,
+  getCryptoChartDataCoingecko,
+} from './api/coinGeckoApi';
+
 /**
- * Mock Market Data Service
+ * Market Data Service with Real API Integration
  *
- * NOTE: This is a placeholder implementation with mock data.
- * Replace these functions with actual API calls to a market data provider.
+ * This service integrates with:
+ * - Polygon.io for stocks and general market data
+ * - CoinGecko for cryptocurrency data (free, no API key required)
  *
- * Recommended APIs:
- * - Alpha Vantage (stocks, forex, crypto)
- * - Polygon.io (stocks, crypto)
- * - CoinGecko (crypto)
- * - Yahoo Finance API
- * - Finnhub (stocks, forex, crypto)
+ * Falls back to mock data if APIs are not configured or fail.
+ *
+ * Configuration:
+ * Set EXPO_PUBLIC_POLYGON_API_KEY in .env file for Polygon.io
+ * CoinGecko works without API key (optional for higher limits)
+ *
+ * See API_INTEGRATION_GUIDE.md for detailed setup instructions.
  */
+
+// API mode: 'real' or 'mock'
+const USE_REAL_API = process.env.EXPO_PUBLIC_USE_REAL_API === 'true';
 
 // Mock data generator
 function generateMockPrice(basePrice: number, volatility: number = 0.02): number {
@@ -111,11 +133,36 @@ const MOCK_ASSETS: Record<string, Asset> = {
 
 /**
  * Search for assets
+ * Uses real APIs if configured, otherwise falls back to mock data
  */
 export async function searchAssets(
   query: string,
   category?: AssetCategory
 ): Promise<APIResponse<SearchResult[]>> {
+  // If real API is enabled, try real APIs first
+  if (USE_REAL_API) {
+    try {
+      // For crypto, use CoinGecko
+      if (category === AssetCategory.CRYPTO || !category) {
+        const cryptoResults = await searchCryptoCoingecko(query);
+        if (cryptoResults.success && cryptoResults.data && cryptoResults.data.length > 0) {
+          return cryptoResults;
+        }
+      }
+
+      // For stocks, use Polygon.io
+      if (category !== AssetCategory.CRYPTO) {
+        const stockResults = await searchAssetsPolygon(query, category);
+        if (stockResults.success && stockResults.data && stockResults.data.length > 0) {
+          return stockResults;
+        }
+      }
+    } catch (error) {
+      console.warn('Real API search failed, falling back to mock data:', error);
+    }
+  }
+
+  // Fallback to mock data
   try {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -150,10 +197,31 @@ export async function searchAssets(
 
 /**
  * Get asset details by ID
+ * Uses real APIs if configured, otherwise falls back to mock data
  */
 export async function getAssetDetails(
   assetId: string
 ): Promise<APIResponse<Asset>> {
+  // If real API is enabled, try real APIs first
+  if (USE_REAL_API) {
+    try {
+      // Try CoinGecko first for crypto assets
+      const cryptoResult = await getCryptoDetailsCoingecko(assetId);
+      if (cryptoResult.success) {
+        return cryptoResult;
+      }
+
+      // Try Polygon.io for stocks
+      const stockResult = await getAssetDetailsPolygon(assetId);
+      if (stockResult.success) {
+        return stockResult;
+      }
+    } catch (error) {
+      console.warn('Real API fetch failed, falling back to mock data:', error);
+    }
+  }
+
+  // Fallback to mock data
   try {
     // Simulate API delay
     await new Promise((resolve) => setTimeout(resolve, 200));
