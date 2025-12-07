@@ -33,6 +33,7 @@ export default function AssetDetailScreen() {
   const [selectedTimeframe, setSelectedTimeframe] = useState(ChartTimeframe.ONE_DAY);
   const [isFav, setIsFav] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [priceUpdateInterval, setPriceUpdateInterval] = useState<NodeJS.Timeout | null>(null);
 
   const holding = portfolio.find((h) => h.assetId === id);
 
@@ -40,15 +41,33 @@ export default function AssetDetailScreen() {
     loadAssetData();
     loadTransactions();
     checkFavourite();
+
+    // Start real-time price updates (every 5 seconds)
+    const interval = setInterval(() => {
+      loadAssetData(false); // Don't show loading spinner on auto-refresh
+    }, 5000);
+
+    setPriceUpdateInterval(interval);
+
+    // Cleanup interval on unmount
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, [id]);
 
-  const loadAssetData = async () => {
-    setLoading(true);
+  const loadAssetData = async (showLoading: boolean = true) => {
+    if (showLoading) {
+      setLoading(true);
+    }
     const response = await getAssetDetails(id);
     if (response.success && response.data) {
       setAsset(response.data);
     }
-    setLoading(false);
+    if (showLoading) {
+      setLoading(false);
+    }
   };
 
   const loadTransactions = async () => {
